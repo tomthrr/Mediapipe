@@ -15,11 +15,6 @@ import DebugManager from '../../../../managers/DebugManager';
 import { DebugGuiTitle } from '../../../../constants/experiences/DebugGuiTitle';
 import MainThreeApp from '../../../../engines/threes/app/MainThreeApp';
 import * as THREE from 'three';
-import AsciiPortalVisionEffect from './portal-effects/AsciiPortalVisionEffect';
-import ThermalPortalVisionEffect from './portal-effects/ThermalPortalVisionEffect';
-import type { PortalSample, PortalVisionEffect, PortalVisionMode } from './portal-effects/PortalVisionEffect';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 type HandTips = {
     topLeft: Vector3;
@@ -28,20 +23,22 @@ type HandTips = {
     bottomRight: Vector3;
 };
 
-// ─── Class ────────────────────────────────────────────────────────────────────
+type PixelSample = {
+    r: number;
+    g: number;
+    b: number;
+    luminance: number;
+};
 
 export default class PortailAscii extends ThreeActorBase {
     private static readonly _DEBUG_INIT_KEY: string = '__portailAsciiDebugInit';
     private static readonly _DEFAULT_ASCII_CHARS: string = '.:-=+*#%@';
     private static readonly _MIN_ASCII_CHARS: string = '.#@';
-    private static readonly _DEFAULT_THERMAL_GLYPHS: string = '.:-=+*#%@';
-    private static readonly _MIN_THERMAL_GLYPHS: string = '.#@';
 
     private _time: number = 0;
     private _cameraController: ThreeCameraControllerBase;
     private _cubeTester: Mesh | null = null;
     private _portalMesh: Mesh | null = null;
-    private _portalMaterial: THREE.MeshBasicMaterial | null = null;
 
     private _asciiCanvas: HTMLCanvasElement;
     private _asciiCtx: CanvasRenderingContext2D;
@@ -54,7 +51,6 @@ export default class PortailAscii extends ThreeActorBase {
     private _asciiCellW: number = 8;
     private _asciiCellH: number = 12;
     private _asciiFrameElapsed: number = 0;
-    private _effects: Record<PortalVisionMode, PortalVisionEffect>;
 
     private readonly _tmpLeft = new Vector3();
     private readonly _tmpRight = new Vector3();
@@ -87,7 +83,6 @@ export default class PortailAscii extends ThreeActorBase {
 
     private readonly _settings = {
         enabled: true,
-        visionMode: 'ascii' as PortalVisionMode,
         handDepth: -2,
         handSpread: 4,
         smoothing: 0.07,
@@ -102,12 +97,8 @@ export default class PortailAscii extends ThreeActorBase {
         asciiBackgroundAlpha: 0.72,
         invert: false,
         allowBlankGlyph: false,
-        thermalShowGlyphs: false,
-        thermalGlyphs: PortailAscii._DEFAULT_THERMAL_GLYPHS,
-        thermalGlyphColor: '#101010',
     };
 
-    // Reusable vectors — allocated once, never inside the hot path
     private readonly _right = new Vector3();
     private readonly _up = new Vector3();
     private readonly _forward = new Vector3();
@@ -124,34 +115,12 @@ export default class PortailAscii extends ThreeActorBase {
         this._asciiTexture.minFilter = LinearFilter;
         this._asciiTexture.magFilter = LinearFilter;
 
-        this._effects = {
-            ascii: new AsciiPortalVisionEffect(() => ({
-                chars: this._settings.asciiChars,
-                color: this._settings.asciiColor,
-                background: this._settings.asciiBackground,
-                backgroundAlpha: this._settings.asciiBackgroundAlpha,
-                fontSize: this._settings.asciiFontSize,
-                invert: this._settings.invert,
-                allowBlankGlyph: this._settings.allowBlankGlyph,
-                minChars: PortailAscii._MIN_ASCII_CHARS,
-            })),
-            thermal: new ThermalPortalVisionEffect(() => ({
-                backgroundAlpha: this._settings.asciiBackgroundAlpha,
-                showGlyphs: this._settings.thermalShowGlyphs,
-                glyphs: this._settings.thermalGlyphs,
-                glyphColor: this._settings.thermalGlyphColor,
-                minGlyphs: PortailAscii._MIN_THERMAL_GLYPHS,
-            })),
-        };
-
         this._cameraController = ThreeCameraControllerManager.get(CameraId.THREE_MAIN);
         this._resizeAsciiCanvas();
         this._initMesh();
         window.addEventListener('hand:update', this._onHandUpdate);
         this._initDebug();
     }
-
-    // ── Debug ─────────────────────────────────────────────────────────────────
 
     private _initDebug(): void {
         if (!DebugManager.isActive) return;
@@ -162,7 +131,6 @@ export default class PortailAscii extends ThreeActorBase {
         anyFolder[PortailAscii._DEBUG_INIT_KEY] = true;
 
         folder.add(this._settings, 'enabled').name('enabled');
-        folder.add(this._settings, 'visionMode', { ascii: 'ascii', thermal: 'thermal' }).name('mode');
         folder.add(this._settings, 'handDepth', -10, 10, 0.01).name('handDepth');
         folder.add(this._settings, 'handSpread', 0, 10, 0.01).name('handSpread');
         folder.add(this._settings, 'smoothing', 0.01, 0.5, 0.01).name('smoothing');
@@ -185,17 +153,13 @@ export default class PortailAscii extends ThreeActorBase {
             .add(this._settings, 'captureHeight', 64, 480, 1)
             .name('captureHeight')
             .onChange(() => this._ensureRenderTarget());
+
         folder.add(this._settings, 'invert').name('invert');
         folder.add(this._settings, 'allowBlankGlyph').name('allowBlankGlyph');
         folder.addColor(this._settings, 'asciiColor').name('fg');
         folder.addColor(this._settings, 'asciiBackground').name('bg');
         folder.add(this._settings, 'asciiBackgroundAlpha', 0, 1, 0.01).name('bgAlpha');
-        folder.add(this._settings, 'thermalShowGlyphs').name('thermalGlyphs');
-        folder.add(this._settings, 'thermalGlyphs').name('thermalSet');
-        folder.addColor(this._settings, 'thermalGlyphColor').name('thermalGlyphColor');
     }
-
-    // ── Setup ─────────────────────────────────────────────────────────────────
 
     private _initMesh(): void {
         this._generateCubeTester();
@@ -210,22 +174,11 @@ export default class PortailAscii extends ThreeActorBase {
         cube.position.set(0, 1, 0);
         this.add(cube);
         this._cubeTester = cube;
-        this._cubeTester.add(new THREE.LineSegments(
-            new THREE.EdgesGeometry(geo),
-            new THREE.LineBasicMaterial({ color: 0x88ccff })
-        ));
+        this._cubeTester.add(
+            new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x88ccff }))
+        );
     }
 
-    /**
-     * Create a portal mesh whose 4 corners are driven by hand finger tips.
-     * Uses a BufferGeometry so vertices can be updated every frame.
-     *
-     * Corner mapping:
-     *   topLeft     ← left  index tip
-     *   bottomLeft  ← left  thumb tip
-     *   topRight    ← right index tip
-     *   bottomRight ← right thumb tip
-     */
     private _createPortalMesh(): Mesh {
         const geo = new THREE.BufferGeometry();
 
@@ -233,15 +186,13 @@ export default class PortailAscii extends ThreeActorBase {
         geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         this._portalPositions = positions;
 
-        // 2 triangles: [TL, BL, TR] + [BL, BR, TR]
         geo.setIndex([0, 1, 2, 1, 3, 2]);
 
-        // UVs — ready for a distortion shader later
         const uvs = new Float32Array([
-            0, 1,  // topLeft
-            0, 0,  // bottomLeft
-            1, 1,  // topRight
-            1, 0,  // bottomRight
+            0, 1,
+            0, 0,
+            1, 1,
+            1, 0,
         ]);
         geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
 
@@ -257,11 +208,8 @@ export default class PortailAscii extends ThreeActorBase {
         mat.toneMapped = false;
 
         const mesh = new THREE.Mesh(geo, mat);
-        // Vertices are written in world space directly, so disable frustum culling
-        // until we have a reliable bounding sphere each frame.
         mesh.frustumCulled = false;
         this._portalMesh = mesh;
-        this._portalMaterial = mat;
         this.add(mesh);
         return mesh;
     }
@@ -308,6 +256,11 @@ export default class PortailAscii extends ThreeActorBase {
         this._renderPixels = new Uint8Array(width * height * 4);
     }
 
+    private _getAsciiChars(): string {
+        const trimmed = this._settings.asciiChars.replace(/\s+$/g, '');
+        return trimmed.length >= 2 ? trimmed : PortailAscii._MIN_ASCII_CHARS;
+    }
+
     private _updateAsciiTexture(dt: number): void {
         if (!this._settings.enabled) return;
         if (!this._renderTarget || !this._portalMesh) return;
@@ -335,28 +288,47 @@ export default class PortailAscii extends ThreeActorBase {
         renderer.setRenderTarget(previousRenderTarget);
         this._portalMesh.visible = true;
 
-        this._drawPortalVisionFromPixels();
+        this._drawAsciiFromPixels();
         this._asciiTexture.needsUpdate = true;
     }
 
-    private _drawPortalVisionFromPixels(): void {
+    private _drawAsciiFromPixels(): void {
         const cols = this._settings.asciiCols;
         const rows = this._settings.asciiRows;
-        const effect = this._effects[this._settings.visionMode] ?? this._effects.ascii;
+        const chars = this._getAsciiChars();
+        const maxIndex = chars.length - 1;
 
-        effect.render({
-            ctx: this._asciiCtx,
-            canvasWidth: this._asciiCanvas.width,
-            canvasHeight: this._asciiCanvas.height,
-            cols,
-            rows,
-            cellWidth: this._asciiCellW,
-            cellHeight: this._asciiCellH,
-            sampleAt: this._sampleAtPortalUV,
-        });
+        const ctx = this._asciiCtx;
+        ctx.clearRect(0, 0, this._asciiCanvas.width, this._asciiCanvas.height);
+
+        const bgRgb = this._hexToRgb(this._settings.asciiBackground);
+        ctx.fillStyle = `rgba(${bgRgb.r}, ${bgRgb.g}, ${bgRgb.b}, ${this._settings.asciiBackgroundAlpha})`;
+        ctx.fillRect(0, 0, this._asciiCanvas.width, this._asciiCanvas.height);
+
+        ctx.fillStyle = this._settings.asciiColor;
+        ctx.font = `${this._settings.asciiFontSize}px monospace`;
+
+        const sample: PixelSample = { r: 0, g: 0, b: 0, luminance: 0 };
+
+        for (let y = 0; y < rows; y++) {
+            const v = rows <= 1 ? 0 : y / (rows - 1);
+            for (let x = 0; x < cols; x++) {
+                const u = cols <= 1 ? 0 : x / (cols - 1);
+                if (!this._sampleAtPortalUV(u, v, sample)) continue;
+
+                const mapped = Math.min(maxIndex, Math.max(0, Math.floor(sample.luminance * maxIndex)));
+                let charIndex = this._settings.invert ? maxIndex - mapped : mapped;
+
+                if (!this._settings.allowBlankGlyph && chars[charIndex] === ' ') {
+                    charIndex = Math.min(maxIndex, 1);
+                }
+
+                ctx.fillText(chars[charIndex], x * this._asciiCellW, y * this._asciiCellH);
+            }
+        }
     }
 
-    private _sampleAtPortalUV = (u: number, v: number, out: PortalSample): boolean => {
+    private _sampleAtPortalUV(u: number, v: number, out: PixelSample): boolean {
         const camera = this._cameraController.camera;
         const p = this._smoothedCorners;
 
@@ -389,16 +361,19 @@ export default class PortailAscii extends ThreeActorBase {
         return true;
     }
 
-    // ── Hand helpers ──────────────────────────────────────────────────────────
+    private _hexToRgb(hex: string): { r: number; g: number; b: number } {
+        const clean = hex.replace('#', '');
+        if (clean.length !== 6) {
+            return { r: 0, g: 0, b: 0 };
+        }
+        const intValue = Number.parseInt(clean, 16);
+        return {
+            r: (intValue >> 16) & 255,
+            g: (intValue >> 8) & 255,
+            b: intValue & 255,
+        };
+    }
 
-    /**
-     * Converts a mediapipe [0..1] tip into a world-space position locked
-     * in front of the camera, using the camera's own right/up/forward axes.
-     *
-     * extractBasis pulls the three columns of the camera's world matrix:
-     *   col 0 → right, col 1 → up, col 2 → camera's local +Z (backwards),
-     * so we negate col 2 to get the true look-forward direction.
-     */
     private _handToWorld(tip: { x: number; y: number; z: number }): Vector3 {
         const camera = this._cameraController.camera;
 
@@ -424,8 +399,6 @@ export default class PortailAscii extends ThreeActorBase {
         if (right?.indexTip) this._rawCorners.topRight.copy(this._handToWorld(right.indexTip));
         if (right?.thumb) this._rawCorners.bottomRight.copy(this._handToWorld(right.thumb));
     };
-
-    // ── Per-frame ─────────────────────────────────────────────────────────────
 
     public update(dt: number): void {
         super.update(dt);
@@ -523,9 +496,7 @@ export default class PortailAscii extends ThreeActorBase {
             .addScaledVector(this._up, y);
     }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
-
-    public override reset(): void { }
+    public override reset(): void {}
 
     public dispose(): void {
         window.removeEventListener('hand:update', this._onHandUpdate);
@@ -535,7 +506,6 @@ export default class PortailAscii extends ThreeActorBase {
             (this._portalMesh.material as THREE.Material).dispose();
             this._portalMesh = null;
         }
-        this._portalMaterial = null;
 
         if (this._renderTarget) {
             this._renderTarget.dispose();
