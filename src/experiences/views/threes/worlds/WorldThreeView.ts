@@ -5,6 +5,7 @@ import Statue from './components/Statue';
 import Environment from './components/Environment';
 import Sky from './components/Sky';
 import WindLines from './components/WindLines';
+import GridFloor from './components/GridFloor';
 
 export default class WorldThreeView extends ThreeViewBase {
     constructor() {
@@ -20,8 +21,9 @@ export default class WorldThreeView extends ThreeViewBase {
         // this._actors.push(new TemplateFont());
 
         this._actors.push(new Sky());
-        this._actors.push(new Dunes());
-        this._actors.push(new Statue());
+        this._actors.push(new GridFloor());
+        //this._actors.push(new Dunes());
+        //this._actors.push(new Statue());
         this._actors.push(new WindLines());
 
         for (const actor of this._actors) this.add(actor);

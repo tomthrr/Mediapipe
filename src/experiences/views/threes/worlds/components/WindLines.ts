@@ -7,6 +7,7 @@ import {
     Vector3,
     Texture,
     CanvasTexture,
+    AdditiveBlending,
 } from 'three';
 import ThreeActorBase from '../../bases/components/ThreeActorBase';
 import { MeshLineGeometry, MeshLineMaterial } from 'meshline'
@@ -37,9 +38,14 @@ type Trail = {
 // ─── Class ────────────────────────────────────────────────────────────────────
 
 export default class WindLines extends ThreeActorBase {
-    private static readonly _NUM_TRAILS   = 6;
+    private static readonly _NUM_TRAILS   = 12;
     private static readonly _TRAIL_LEN    = 200;
-    private static readonly _TRAIL_COLORS = ['#f2f2f2', '#ececec', '#e0e0e0', '#dadada'];
+    private static readonly _TRAIL_COLORS = [
+        '#00c3ff',
+        '#ffd900', 
+        '#ff8800', 
+        '#ff0000'
+    ];
 
     private static readonly _DEBUG_INIT_KEY: string = '__windLinesDebugInit';
 
@@ -163,16 +169,10 @@ export default class WindLines extends ThreeActorBase {
             sizeAttenuation: 1,
             resolution: new Vector2(window.innerWidth, window.innerHeight),
             lineWidth: this._settings.lineWidth,
-            useAlphaMap: 1,
-            alphaTest: 0.1,
-            alphaMap: this._createAlphaTexture(),
         });
-
-        mat.blending = NormalBlending;
-        mat.transparent = true;
-
+        
         const mesh = new Mesh(geometry, mat);
-        mesh.frustumCulled = false;
+        
         this.add(mesh);
 
         this._trails.push({
