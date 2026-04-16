@@ -7,6 +7,7 @@ import Sky from './components/Sky';
 import WindLines from './components/WindLines';
 import GridFloor from './components/GridFloor';
 import PortailAscii from './components/PortailAscii';
+import PortalThermalVision from './components/PortalThermalVision';
 
 export default class WorldThreeView extends ThreeViewBase {
     constructor() {
@@ -26,7 +27,8 @@ export default class WorldThreeView extends ThreeViewBase {
         //this._actors.push(new Dunes());
         //this._actors.push(new Statue());
         //this._actors.push(new WindLines());
-        this._actors.push(new PortailAscii());
+        //this._actors.push(new PortailAscii());
+        this._actors.push(new PortalThermalVision());
 
         for (const actor of this._actors) this.add(actor);
     }
