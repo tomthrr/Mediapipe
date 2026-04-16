@@ -34,6 +34,9 @@ export default abstract class ThreeModelBase extends ThreeActorBase {
 
         this._model.traverse((child) => {
             if (child instanceof Mesh) {
+                if(child.name === 'STATUE001') {
+                    child.geometry.computeBoundingBox();
+                };
                 if (this._parameters.castShadow) child.castShadow = true;
                 if (this._parameters.receiveShadow) child.receiveShadow = true;
             }

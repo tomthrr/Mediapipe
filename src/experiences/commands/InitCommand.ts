@@ -51,7 +51,7 @@ class InitCommand {
         ThreeAssetsManager.addHDR(AssetId.THREE_HDR_2, AssetUtils.GetPath('hdrs/wooden_studio_10_1k.hdr'));
         ThreeAssetsManager.addHDR(AssetId.THREE_HDR_3, AssetUtils.GetPath('hdrs/pink_sunrise_1k.hdr'));
 
-        ThreeAssetsManager.addModel(AssetId.THREE_GLTF_DUNES, AssetUtils.GetPath('models/desert_statue.glb'));
+        ThreeAssetsManager.addModel(AssetId.THREE_GLTF_DUNES, AssetUtils.GetPath('models/desert_statue_uv.glb'));
         ThreeAssetsManager.addTexture(AssetId.THREE_TEXTURE_DUNES_ARM, AssetUtils.GetPath('textures/dunes/dunes_arm.png'));
         ThreeAssetsManager.addTexture(AssetId.THREE_TEXTURE_DUNES_NORMAL, AssetUtils.GetPath('textures/dunes/dunes_normal.png'));
     }

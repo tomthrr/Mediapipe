@@ -20,6 +20,10 @@ export default class DebugThreeCameraController extends ThreeCameraControllerBas
     private static readonly _CONTROLS_DAMPING_FACTOR: number = 0.05;
     private static readonly _CONTROLS_CENTER_KEY: string = KeyboardConstant.CODES.CONTROL_LEFT;
 
+    // Add at class level
+    private _hitPoints: Vector3[] = [];
+    private static readonly _MAX_HIT_POINTS = 64;
+
     constructor() {
         super(CameraId.THREE_DEBUG, DebugThreeCameraController._DEBUG_CAMERA_OPTIONS);
         this._camera.position.copy(DebugThreeCameraController._DEFAULT_CAMERA_POSITION);
@@ -45,11 +49,31 @@ export default class DebugThreeCameraController extends ThreeCameraControllerBas
 
     private readonly _onMouseDown = (): void => {
         if (DomKeyboardManager.isKeyDown(DebugThreeCameraController._CONTROLS_CENTER_KEY)) {
-            const intersect = ThreeRaycasterManager.castFromCameraToPointer(MainThreeApp.scene.children);
-            if (intersect.length > 0) {
-                this._controls.target.copy(intersect[0].point);
-                this._controls.update();
+            const statue = MainThreeApp.scene.getObjectByName('STATUE001');
+            if (!statue) return;
+
+            const intersect = ThreeRaycasterManager.castFromCameraToPointer([statue]);
+            if (intersect.length === 0) return;
+
+            const hitPoint = intersect[0].point.clone();
+
+            // Cap the array to avoid runaway growth
+            if (this._hitPoints.length < DebugThreeCameraController._MAX_HIT_POINTS) {
+                this._hitPoints.push(hitPoint);
             }
+
+            // Sync all children that have a shader
+            statue.traverse((child) => {
+                if (!(child)) return;
+                const shader = child.material.userData.shader;
+                if (!shader) return;
+
+                const arr = shader.uniforms.uHitPoints.value as Vector3[];
+                this._hitPoints.forEach((p, i) => {
+                    arr[i].copy(p); // mutate in-place, no allocation
+                });
+                shader.uniforms.uHitCount.value = this._hitPoints.length;
+            });
         }
     };
 }

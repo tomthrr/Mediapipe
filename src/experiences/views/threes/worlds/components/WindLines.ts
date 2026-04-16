@@ -1,4 +1,14 @@
-import { MathUtils, Mesh, NormalBlending, Vector2, Vector3, Texture, CanvasTexture } from 'three';
+import {
+    MathUtils,
+    Mesh,
+    MeshBasicMaterial,
+    NormalBlending,
+    Vector2,
+    Vector3,
+    Texture,
+    CanvasTexture,
+    AdditiveBlending,
+} from 'three';
 import ThreeActorBase from '../../bases/components/ThreeActorBase';
 import { MeshLineGeometry, MeshLineMaterial } from 'meshline'
 import { type MediapipeHandsSnapshot } from '../../../../managers/MediapipeManager';
@@ -7,6 +17,10 @@ import { CameraId } from '../../../../constants/experiences/CameraId';
 import ThreeCameraControllerBase from '../../../../cameras/threes/bases/ThreeCameraControllerBase';
 import DebugManager from '../../../../managers/DebugManager';
 import { DebugGuiTitle } from '../../../../constants/experiences/DebugGuiTitle';
+import ThreeRaycasterManager from '../../../../managers/threes/ThreeRaycasterManager';
+import MainThreeApp from '../../../../engines/threes/app/MainThreeApp';
+import { Object3DId } from '../../../../constants/experiences/Object3dId';
+import * as THREE from 'three';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,9 +38,14 @@ type Trail = {
 // ─── Class ────────────────────────────────────────────────────────────────────
 
 export default class WindLines extends ThreeActorBase {
-    private static readonly _NUM_TRAILS   = 6;
+    private static readonly _NUM_TRAILS   = 12;
     private static readonly _TRAIL_LEN    = 200;
-    private static readonly _TRAIL_COLORS = ['#f2f2f2', '#ececec', '#e0e0e0', '#dadada'];
+    private static readonly _TRAIL_COLORS = [
+        '#00c3ff',
+        '#ffd900', 
+        '#ff8800', 
+        '#ff0000'
+    ];
 
     private static readonly _DEBUG_INIT_KEY: string = '__windLinesDebugInit';
 
@@ -34,6 +53,8 @@ export default class WindLines extends ThreeActorBase {
     private _time: number      = 0;
     private _target3D: Vector3 = new Vector3();
     private _cameraController: ThreeCameraControllerBase;
+
+    private _debugRaycastPoint: Mesh | null = null;
 
     private readonly _settings = {
         enabled: true,
@@ -148,16 +169,10 @@ export default class WindLines extends ThreeActorBase {
             sizeAttenuation: 1,
             resolution: new Vector2(window.innerWidth, window.innerHeight),
             lineWidth: this._settings.lineWidth,
-            useAlphaMap: 1,
-            alphaTest: 0.1,
-            alphaMap: this._createAlphaTexture(),
         });
-
-        mat.blending = NormalBlending;
-        mat.transparent = true;
-
+        
         const mesh = new Mesh(geometry, mat);
-        mesh.frustumCulled = false;
+        
         this.add(mesh);
 
         this._trails.push({
@@ -223,8 +238,61 @@ export default class WindLines extends ThreeActorBase {
     private _onHandUpdate = (e: CustomEvent<MediapipeHandsSnapshot>): void => {
         if (!this._settings.enabled) return;
         const tip = e.detail.right?.indexTip;
-        if (tip) this._target3D.copy(this._handToWorld(tip));
+        if (tip) {
+            // Convert Mediapipe [0..1] → NDC [-1..1].
+            // Mirror X to match your UI/camera mapping.
+            const ndcX = (0.5 - tip.x) * 2;
+            const ndcY = (0.5 - tip.y) * 2;
+
+            const statueRoot =
+                MainThreeApp.scene.getObjectByName(Object3DId.STATUE) ?? MainThreeApp.scene.getObjectByName('STATUE001');
+
+            if (statueRoot) {
+                const hits = ThreeRaycasterManager.castFromCameraToNdc(ndcX, ndcY, [statueRoot]);
+                if (hits.length > 0) {
+                    const hit = hits[0];
+                    console.log('Hit statue at', hit.point);
+                    this._target3D.copy(hit.point);
+                    this._applyHitToStatue(statueRoot, hit);
+                    return;
+                }
+            }
+
+            // Fallback: keep the previous behavior if we don't hit the statue.
+            this._target3D.copy(this._handToWorld(tip));
+        };
     };
+
+    private _applyHitToStatue(statueRoot: THREE.Object3D, hit: THREE.Intersection): void {
+        // Unlimited persistence: paint into the statue's hit-mask texture (created by Statue.ts).
+        let node: THREE.Object3D | null = statueRoot;
+        let painter:
+            | { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; texture: THREE.Texture; size: number }
+            | undefined;
+
+        while (node && !painter) {
+            painter = node.userData.hitMaskPainter;
+            node = node.parent;
+        }
+
+        if (!painter) return;
+        if (!hit.uv) return;
+
+        const { ctx, texture, size } = painter;
+        const x = hit.uv.x * size;
+        const y = (1 - hit.uv.y) * size;
+
+        const radius = 30;
+        const grd = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        grd.addColorStop(0, 'rgba(255,255,255,0.9)');
+        grd.addColorStop(1, 'rgba(255,255,255,0.0)');
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        texture.needsUpdate = true;
+    }
 
     public update(dt: number): void {
         super.update(dt);
@@ -270,5 +338,12 @@ export default class WindLines extends ThreeActorBase {
             trail.material.dispose();
         }
         this._trails = [];
+
+        if (this._debugRaycastPoint) {
+            MainThreeApp.scene.remove(this._debugRaycastPoint);
+            this._debugRaycastPoint.geometry.dispose();
+            (this._debugRaycastPoint.material as MeshBasicMaterial).dispose();
+            this._debugRaycastPoint = null;
+        }
     }
 }
