@@ -133,6 +133,7 @@ onBeforeUnmount(() => {
 
 .output_canvas {
     pointer-events: none;
+    object-fit: contain;
 }
 
 /* BUTTON */

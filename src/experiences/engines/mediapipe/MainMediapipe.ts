@@ -24,18 +24,8 @@ class MainMediapipe {
         this.canvasCtx = null;
     }
 
-    private _getOrCreateVideoElement(): HTMLVideoElement {
-        const existing = document.getElementById("webcam") as HTMLVideoElement | null;
-        if (existing) return existing;
-
-        const video = document.createElement('video');
-        video.id = 'webcam';
-        video.autoplay = true;
-        video.playsInline = true;
-        video.muted = true;
-        video.style.display = 'none';
-        document.body.appendChild(video);
-        return video;
+    private _getVideoElement(): HTMLVideoElement | null {
+        return document.getElementById("webcam") as HTMLVideoElement | null;
     }
 
     private _refreshCanvasRefs(): void {
@@ -71,27 +61,29 @@ class MainMediapipe {
     }
 
     private initCamera() {
-        this.video = this._getOrCreateVideoElement();
-        this._refreshCanvasRefs();
-
         const hasGetUserMedia = () => !!navigator.mediaDevices?.getUserMedia;
         if (!hasGetUserMedia()) {
             console.warn("getUserMedia() is not supported by your browser");
             return;
         }
 
-        const tryBindButton = () => {
+        const tryBindElements = () => {
+            const videoEl = this._getVideoElement();
+            const canvasEl = document.getElementById("output_canvas") as HTMLCanvasElement | null;
             const btn = document.getElementById("webcamButton") as HTMLButtonElement | null;
-            if (btn) {
+
+            if (videoEl && canvasEl && btn) {
+                this.video = videoEl;
+                this._refreshCanvasRefs();
                 this.enableWebcamButton = btn;
                 btn.addEventListener("click", this.enableCam);
             } else {
-                // Retry on next frame until the Vue component renders
-                requestAnimationFrame(tryBindButton);
+                // Retry on next frame until the Vue component renders.
+                requestAnimationFrame(tryBindElements);
             }
         };
 
-        tryBindButton();
+        tryBindElements();
     }
 
     enableCam = (event: Event) => {
