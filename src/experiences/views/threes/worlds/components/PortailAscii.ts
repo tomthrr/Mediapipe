@@ -1,27 +1,15 @@
 import {
-    Mesh,
-    Vector3,
     CanvasTexture,
     LinearFilter,
+    Mesh,
     RGBAFormat,
     UnsignedByteType,
 } from 'three';
-import ThreeActorBase from '../../bases/components/ThreeActorBase';
-import { type MediapipeHandsSnapshot } from '../../../../managers/MediapipeManager';
-import ThreeCameraControllerManager from '../../../../managers/threes/ThreeCameraControllerManager';
-import { CameraId } from '../../../../constants/experiences/CameraId';
-import ThreeCameraControllerBase from '../../../../cameras/threes/bases/ThreeCameraControllerBase';
 import DebugManager from '../../../../managers/DebugManager';
-import { DebugGuiTitle } from '../../../../constants/experiences/DebugGuiTitle';
 import MainThreeApp from '../../../../engines/threes/app/MainThreeApp';
+import { DebugGuiTitle } from '../../../../constants/experiences/DebugGuiTitle';
+import PortalBase from './PortalBase';
 import * as THREE from 'three';
-
-type HandTips = {
-    topLeft: Vector3;
-    bottomLeft: Vector3;
-    topRight: Vector3;
-    bottomRight: Vector3;
-};
 
 type PixelSample = {
     r: number;
@@ -30,15 +18,13 @@ type PixelSample = {
     luminance: number;
 };
 
-export default class PortailAscii extends ThreeActorBase {
+export default class PortailAscii extends PortalBase {
     private static readonly _DEBUG_INIT_KEY: string = '__portailAsciiDebugInit';
     private static readonly _DEFAULT_ASCII_CHARS: string = '.:-=+*#%@';
     private static readonly _MIN_ASCII_CHARS: string = '.#@';
 
     private _time: number = 0;
-    private _cameraController: ThreeCameraControllerBase;
     private _cubeTester: Mesh | null = null;
-    private _portalMesh: Mesh | null = null;
 
     private _asciiCanvas: HTMLCanvasElement;
     private _asciiCtx: CanvasRenderingContext2D;
@@ -52,40 +38,9 @@ export default class PortailAscii extends ThreeActorBase {
     private _asciiCellH: number = 12;
     private _asciiFrameElapsed: number = 0;
 
-    private readonly _tmpLeft = new Vector3();
-    private readonly _tmpRight = new Vector3();
-    private readonly _tmpPoint = new Vector3();
-    private readonly _tmpProjected = new Vector3();
-    private readonly _tmpFromCam = new Vector3();
-
-    private _rawCorners: HandTips = {
-        topLeft: new Vector3(),
-        bottomLeft: new Vector3(),
-        topRight: new Vector3(),
-        bottomRight: new Vector3(),
-    };
-
-    private _targetCorners: HandTips = {
-        topLeft: new Vector3(),
-        bottomLeft: new Vector3(),
-        topRight: new Vector3(),
-        bottomRight: new Vector3(),
-    };
-
-    private _smoothedCorners: HandTips = {
-        topLeft: new Vector3(),
-        bottomLeft: new Vector3(),
-        topRight: new Vector3(),
-        bottomRight: new Vector3(),
-    };
-
-    private _portalPositions: Float32Array | null = null;
+    private readonly _tmpProjected = new THREE.Vector3();
 
     private readonly _settings = {
-        enabled: true,
-        handDepth: -2,
-        handSpread: 4,
-        smoothing: 0.07,
         asciiChars: PortailAscii._DEFAULT_ASCII_CHARS,
         asciiCols: 96,
         asciiRows: 54,
@@ -99,10 +54,6 @@ export default class PortailAscii extends ThreeActorBase {
         allowBlankGlyph: false,
     };
 
-    private readonly _right = new Vector3();
-    private readonly _up = new Vector3();
-    private readonly _forward = new Vector3();
-
     constructor() {
         super();
         this._asciiCanvas = document.createElement('canvas');
@@ -115,10 +66,8 @@ export default class PortailAscii extends ThreeActorBase {
         this._asciiTexture.minFilter = LinearFilter;
         this._asciiTexture.magFilter = LinearFilter;
 
-        this._cameraController = ThreeCameraControllerManager.get(CameraId.THREE_MAIN);
         this._resizeAsciiCanvas();
         this._initMesh();
-        window.addEventListener('hand:update', this._onHandUpdate);
         this._initDebug();
     }
 
@@ -130,10 +79,10 @@ export default class PortailAscii extends ThreeActorBase {
         if (anyFolder[PortailAscii._DEBUG_INIT_KEY]) return;
         anyFolder[PortailAscii._DEBUG_INIT_KEY] = true;
 
-        folder.add(this._settings, 'enabled').name('enabled');
-        folder.add(this._settings, 'handDepth', -10, 10, 0.01).name('handDepth');
-        folder.add(this._settings, 'handSpread', 0, 10, 0.01).name('handSpread');
-        folder.add(this._settings, 'smoothing', 0.01, 0.5, 0.01).name('smoothing');
+        folder.add(this._portalSettings, 'enabled').name('enabled');
+        folder.add(this._portalSettings, 'handDepth', -10, 10, 0.01).name('handDepth');
+        folder.add(this._portalSettings, 'handSpread', 0, 10, 0.01).name('handSpread');
+        folder.add(this._portalSettings, 'smoothing', 0.01, 0.5, 0.01).name('smoothing');
 
         folder.add(this._settings, 'asciiChars').name('chars');
         folder
@@ -163,7 +112,7 @@ export default class PortailAscii extends ThreeActorBase {
 
     private _initMesh(): void {
         this._generateCubeTester();
-        this._createPortalMesh();
+        this._createPortalActor();
         this._ensureRenderTarget();
     }
 
@@ -179,23 +128,7 @@ export default class PortailAscii extends ThreeActorBase {
         );
     }
 
-    private _createPortalMesh(): Mesh {
-        const geo = new THREE.BufferGeometry();
-
-        const positions = new Float32Array(4 * 3);
-        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        this._portalPositions = positions;
-
-        geo.setIndex([0, 1, 2, 1, 3, 2]);
-
-        const uvs = new Float32Array([
-            0, 1,
-            0, 0,
-            1, 1,
-            1, 0,
-        ]);
-        geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-
+    private _createPortalActor(): Mesh {
         const mat = new THREE.MeshBasicMaterial({
             color: 0xffffff,
             map: this._asciiTexture,
@@ -207,11 +140,7 @@ export default class PortailAscii extends ThreeActorBase {
         });
         mat.toneMapped = false;
 
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.frustumCulled = false;
-        this._portalMesh = mesh;
-        this.add(mesh);
-        return mesh;
+        return super._createPortalMesh(mat);
     }
 
     private _resizeAsciiCanvas(): void {
@@ -262,7 +191,7 @@ export default class PortailAscii extends ThreeActorBase {
     }
 
     private _updateAsciiTexture(dt: number): void {
-        if (!this._settings.enabled) return;
+        if (!this._portalSettings.enabled) return;
         if (!this._renderTarget || !this._portalMesh) return;
 
         this._asciiFrameElapsed += dt;
@@ -330,12 +259,8 @@ export default class PortailAscii extends ThreeActorBase {
 
     private _sampleAtPortalUV(u: number, v: number, out: PixelSample): boolean {
         const camera = this._cameraController.camera;
-        const p = this._smoothedCorners;
-
-        this._tmpLeft.copy(p.topLeft).lerp(p.bottomLeft, v);
-        this._tmpRight.copy(p.topRight).lerp(p.bottomRight, v);
-        this._tmpPoint.copy(this._tmpLeft).lerp(this._tmpRight, u);
-        this._tmpProjected.copy(this._tmpPoint).project(camera);
+        this._samplePortalWorldPoint(u, v, this._tmpProjected);
+        this._tmpProjected.project(camera);
 
         if (
             this._tmpProjected.x < -1 || this._tmpProjected.x > 1 ||
@@ -374,32 +299,6 @@ export default class PortailAscii extends ThreeActorBase {
         };
     }
 
-    private _handToWorld(tip: { x: number; y: number; z: number }): Vector3 {
-        const camera = this._cameraController.camera;
-
-        const nx = (tip.x - 0.5) * -2;
-        const ny = (0.5 - tip.y) * 2;
-
-        camera.matrixWorld.extractBasis(this._right, this._up, this._forward);
-        this._forward.negate();
-
-        return new Vector3()
-            .copy(camera.position)
-            .addScaledVector(this._forward, this._settings.handDepth)
-            .addScaledVector(this._right, nx * this._settings.handSpread)
-            .addScaledVector(this._up, ny * this._settings.handSpread);
-    }
-
-    private _onHandUpdate = (e: CustomEvent<MediapipeHandsSnapshot>): void => {
-        if (!this._settings.enabled) return;
-        const { left, right } = e.detail;
-
-        if (left?.indexTip) this._rawCorners.topLeft.copy(this._handToWorld(left.indexTip));
-        if (left?.thumb) this._rawCorners.bottomLeft.copy(this._handToWorld(left.thumb));
-        if (right?.indexTip) this._rawCorners.topRight.copy(this._handToWorld(right.indexTip));
-        if (right?.thumb) this._rawCorners.bottomRight.copy(this._handToWorld(right.thumb));
-    };
-
     public update(dt: number): void {
         super.update(dt);
         this._time += dt;
@@ -409,103 +308,14 @@ export default class PortailAscii extends ThreeActorBase {
             this._cubeTester.rotation.y = this._time * 0.3;
         }
 
-        this._updatePortalMesh();
+        this._updatePortalMeshFromHands();
         this._updateAsciiTexture(dt);
-    }
-
-    private _updatePortalMesh(): void {
-        if (!this._portalMesh || !this._portalPositions) return;
-
-        this._computeRigidTargetCorners();
-
-        const s = this._settings.smoothing;
-
-        this._smoothedCorners.topLeft.lerp(this._targetCorners.topLeft, s);
-        this._smoothedCorners.bottomLeft.lerp(this._targetCorners.bottomLeft, s);
-        this._smoothedCorners.topRight.lerp(this._targetCorners.topRight, s);
-        this._smoothedCorners.bottomRight.lerp(this._targetCorners.bottomRight, s);
-
-        const p = this._smoothedCorners;
-        const buf = this._portalPositions;
-
-        buf[0] = p.topLeft.x; buf[1] = p.topLeft.y; buf[2] = p.topLeft.z;
-        buf[3] = p.bottomLeft.x; buf[4] = p.bottomLeft.y; buf[5] = p.bottomLeft.z;
-        buf[6] = p.topRight.x; buf[7] = p.topRight.y; buf[8] = p.topRight.z;
-        buf[9] = p.bottomRight.x; buf[10] = p.bottomRight.y; buf[11] = p.bottomRight.z;
-
-        (this._portalMesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-        this._portalMesh.geometry.computeBoundingSphere();
-    }
-
-    private _computeRigidTargetCorners(): void {
-        const camera = this._cameraController.camera;
-
-        camera.matrixWorld.extractBasis(this._right, this._up, this._forward);
-        this._forward.negate();
-
-        const xTL = this._axisFromCamera(this._rawCorners.topLeft, this._right);
-        const xBL = this._axisFromCamera(this._rawCorners.bottomLeft, this._right);
-        const xTR = this._axisFromCamera(this._rawCorners.topRight, this._right);
-        const xBR = this._axisFromCamera(this._rawCorners.bottomRight, this._right);
-
-        const yTL = this._axisFromCamera(this._rawCorners.topLeft, this._up);
-        const yBL = this._axisFromCamera(this._rawCorners.bottomLeft, this._up);
-        const yTR = this._axisFromCamera(this._rawCorners.topRight, this._up);
-        const yBR = this._axisFromCamera(this._rawCorners.bottomRight, this._up);
-
-        const xLeftRaw = 0.5 * (xTL + xBL);
-        const xRightRaw = 0.5 * (xTR + xBR);
-        const yTopRaw = 0.5 * (yTL + yTR);
-        const yBottomRaw = 0.5 * (yBL + yBR);
-
-        let xLeft = Math.min(xLeftRaw, xRightRaw);
-        let xRight = Math.max(xLeftRaw, xRightRaw);
-        let yBottom = Math.min(yBottomRaw, yTopRaw);
-        let yTop = Math.max(yBottomRaw, yTopRaw);
-
-        const minHalfWidth = 0.1;
-        const minHalfHeight = 0.1;
-
-        if (xRight - xLeft < minHalfWidth * 2) {
-            const cx = 0.5 * (xLeft + xRight);
-            xLeft = cx - minHalfWidth;
-            xRight = cx + minHalfWidth;
-        }
-
-        if (yTop - yBottom < minHalfHeight * 2) {
-            const cy = 0.5 * (yTop + yBottom);
-            yBottom = cy - minHalfHeight;
-            yTop = cy + minHalfHeight;
-        }
-
-        this._buildCameraPlanePoint(xLeft, yTop, this._targetCorners.topLeft);
-        this._buildCameraPlanePoint(xLeft, yBottom, this._targetCorners.bottomLeft);
-        this._buildCameraPlanePoint(xRight, yTop, this._targetCorners.topRight);
-        this._buildCameraPlanePoint(xRight, yBottom, this._targetCorners.bottomRight);
-    }
-
-    private _axisFromCamera(point: Vector3, axis: Vector3): number {
-        this._tmpFromCam.copy(point).sub(this._cameraController.camera.position);
-        return this._tmpFromCam.dot(axis);
-    }
-
-    private _buildCameraPlanePoint(x: number, y: number, out: Vector3): void {
-        out.copy(this._cameraController.camera.position)
-            .addScaledVector(this._forward, this._settings.handDepth)
-            .addScaledVector(this._right, x)
-            .addScaledVector(this._up, y);
     }
 
     public override reset(): void {}
 
     public dispose(): void {
-        window.removeEventListener('hand:update', this._onHandUpdate);
-
-        if (this._portalMesh) {
-            this._portalMesh.geometry.dispose();
-            (this._portalMesh.material as THREE.Material).dispose();
-            this._portalMesh = null;
-        }
+        this._disposePortalBase();
 
         if (this._renderTarget) {
             this._renderTarget.dispose();

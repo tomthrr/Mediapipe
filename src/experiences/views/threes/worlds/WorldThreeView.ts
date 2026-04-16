@@ -20,17 +20,17 @@ export default class WorldThreeView extends ThreeViewBase {
 
         // Camera-background comparison mode:
         // disable world decor so webcam background remains fully visible.
-        // this._actors.push(new Environment());
+        this._actors.push(new Environment());
         // this._actors.push(new TemplateMesh());
         // this._actors.push(new TemplateModel());
         // this._actors.push(new TemplateFont());
 
-        // this._actors.push(new Sky());
-        // this._actors.push(new GridFloor());
+        this._actors.push(new Sky());
+        this._actors.push(new GridFloor());
         //this._actors.push(new WindLines());
         //this._actors.push(new PortailAscii());
-        //this._actors.push(new PortalThermalVision());
-        this._actors.push(new PortalCameraThermalVision());
+        this._actors.push(new PortalThermalVision());
+        //this._actors.push(new PortalCameraThermalVision());
 
         for (const actor of this._actors) this.add(actor);
     }
