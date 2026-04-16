@@ -102,7 +102,7 @@ export default class Environment extends ThreeActorBase {
                 1
             );
             this._sunLightHelper.visible = DebugManager.isVisible;
-            this.add(this._sunLightHelper);
+            //this.add(this._sunLightHelper);
 
             DebugManager.onVisibilityChange.add(this._onDebugVisibilityChange);
 

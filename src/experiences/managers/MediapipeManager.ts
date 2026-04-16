@@ -8,9 +8,11 @@ export interface MediapipeHandSnapshot {
     landmarks: Array<MediapipePoint3>;
     wrist: MediapipePoint3;
     indexTip: MediapipePoint3;
+    thumb: MediapipePoint3;
     worldLandmarks?: Array<MediapipePoint3>;
     worldWrist?: MediapipePoint3;
     worldIndexTip?: MediapipePoint3;
+    worldThumb?: MediapipePoint3;
     fist?: MediapipePoint3;
     isFist?: boolean;
 }
@@ -79,19 +81,23 @@ class MediapipeManager {
 
             const wrist    = landmarks[0];
             const indexTip = landmarks[8] ?? wrist;
+            const thumb    = landmarks[4] ?? wrist;
 
             const worldLandmarks = results.worldLandmarks?.[i];
             const worldWrist     = worldLandmarks?.[0];
             const worldIndexTip  = worldLandmarks?.[8];
+            const worldThumb     = worldLandmarks?.[4];
 
             const hand: MediapipeHandSnapshot = {
                 side,
                 landmarks,
                 wrist,
                 indexTip,
+                thumb,
                 worldLandmarks,
                 worldWrist,
                 worldIndexTip,
+                worldThumb,
                 isFist: this._isFist(landmarks),
                 fist: this._getFistPosition(landmarks),
             };
