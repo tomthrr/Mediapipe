@@ -25,6 +25,14 @@ export default class PortalThermalVision extends PortalBase {
 
     private readonly _settings = {
         captureHeight: 1080,
+        thermalIntensity: 1.0,
+        scanlineStrength: 0.05,
+        noiseStrength: 1.0,
+        distortionStrength: 0.05,
+        crtBend: 2.0,
+        shiftR: 0.015,
+        shiftG: 0.009,
+        shiftB: 0.014,
     };
 
     private static readonly _VERTEX_SHADER = `
@@ -44,6 +52,14 @@ export default class PortalThermalVision extends PortalBase {
         uniform sampler2D uSceneTex;
         uniform float uTime;
         uniform vec2 uResolution;
+        uniform float uThermalIntensity;
+        uniform float uScanlineStrength;
+        uniform float uNoiseStrength;
+        uniform float uDistortionStrength;
+        uniform float uCrtBend;
+        uniform float uShiftR;
+        uniform float uShiftG;
+        uniform float uShiftB;
 
         varying vec4 vClipPos;
 
@@ -62,6 +78,43 @@ export default class PortalThermalVision extends PortalBase {
                 color = mix(colors[1], colors[2], (luminance - 0.5) / 0.5);   
             }
             return color;
+        }
+
+        float scanline(vec2 uv) {
+            return sin(uResolution.y * uv.y * 0.7 - uTime * 10.0);
+        }
+
+        float slowscan(vec2 uv) {
+            return sin(uResolution.y * uv.y * 0.02 + uTime * 6.0);
+        }
+
+        vec2 scandistort(vec2 uv) {
+            float scan1 = clamp(cos(uv.y * 2.0 + uTime), 0.0, 1.0);
+            float scan2 = clamp(cos(uv.y * 2.0 + uTime + 4.0) * 10.0, 0.0, 1.0) ;
+            float amount = scan1 * scan2 * uv.x; 
+            
+            uv.x -= uDistortionStrength * mix(texture(uSceneTex, vec2(uv.x, amount)).r * amount, amount, 0.9);
+
+            return uv;
+            
+        }
+
+        // from https://www.shadertoy.com/view/4sf3Dr
+        // Thanks, Jasper
+        vec2 crt(vec2 coord, float bend) {
+            // put in symmetrical coords
+            coord = (coord - 0.5) * 2.0;
+
+            coord *= 0.5;	
+            
+            // deform coords
+            coord.x *= 1.0 + pow((abs(coord.y) / bend), 2.0);
+            coord.y *= 1.0 + pow((abs(coord.x) / bend), 2.0);
+
+            // transform back to 0.0 - 1.0 space
+            coord  = (coord / 1.0) + 0.5;
+
+            return coord;
         }
 
         vec2 colorShift(vec2 uv) {
@@ -87,10 +140,31 @@ export default class PortalThermalVision extends PortalBase {
         void main() {
             vec2 uv = (vClipPos.xy / max(vClipPos.w, 0.0001)) * 0.5 + 0.5;
 
-            vec3 ctexture = texture2D(uSceneTex, uv).rgb;
-            // add color thermal vision effect
-            vec3 color = thermal_vision(ctexture);
-            //color = thermal_vision(color.rgb);
+            vec2 sd_uv = scandistort(uv);
+            vec2 crt_uv = crt(sd_uv, uCrtBend);
+
+            // Récupère le rand AVANT de modifier color
+            vec4 rand = texture(uSceneTex, vec2(uTime * 0.01, uTime * 0.02));
+
+            // Sample avec color shift par canal sur la texture BRUTE
+            float r = texture(uSceneTex, crt(colorshift(sd_uv, uShiftR, rand.r), uCrtBend)).r;
+            float g = texture(uSceneTex, crt(colorshift(sd_uv, uShiftG, rand.g), uCrtBend)).g;
+            float b = texture(uSceneTex, crt(colorshift(sd_uv, uShiftB, rand.b), uCrtBend)).b;
+
+            // Applique thermal_vision sur la couleur reconstituée
+            vec3 rawColor = vec3(r, g, b);
+            vec3 thermalColor = thermal_vision(rawColor);
+            vec3 color = mix(rawColor, thermalColor, clamp(uThermalIntensity, 0.0, 1.0));
+
+            // Scanlines
+            vec3 scanline_color = vec3(scanline(crt_uv));
+            vec3 slowscan_color = vec3(slowscan(crt_uv));
+
+            color = mix(color, mix(scanline_color, slowscan_color, 0.5), uScanlineStrength);
+            color *= mix(1.0, noise(uv), uNoiseStrength);
+
+            // vec3 ctexture = texture2D(uSceneTex, uv).rgb;
+            // vec3 color = thermal_vision(ctexture);
 
             gl_FragColor = vec4(color, 1.0);
         }
@@ -118,6 +192,14 @@ export default class PortalThermalVision extends PortalBase {
             .add(this._settings, 'captureHeight', 64, 480, 1)
             .name('captureHeight')
             .onChange(() => this._ensureRenderTarget());
+        folder.add(this._settings, 'thermalIntensity', 0, 1, 0.001).name('thermal');
+        folder.add(this._settings, 'scanlineStrength', 0, 0.3, 0.001).name('scanline');
+        folder.add(this._settings, 'noiseStrength', 0, 1.5, 0.001).name('noise');
+        folder.add(this._settings, 'distortionStrength', 0, 0.2, 0.001).name('distortion');
+        folder.add(this._settings, 'crtBend', 0.8, 5, 0.01).name('crtBend');
+        folder.add(this._settings, 'shiftR', 0, 0.08, 0.001).name('shiftR');
+        folder.add(this._settings, 'shiftG', 0, 0.08, 0.001).name('shiftG');
+        folder.add(this._settings, 'shiftB', 0, 0.08, 0.001).name('shiftB');
     }
 
     private _initMesh(): void {
@@ -151,6 +233,14 @@ export default class PortalThermalVision extends PortalBase {
                 uSceneTex: { value: null },
                 uTime: { value: 0 },
                 uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                uThermalIntensity: { value: this._settings.thermalIntensity },
+                uScanlineStrength: { value: this._settings.scanlineStrength },
+                uNoiseStrength: { value: this._settings.noiseStrength },
+                uDistortionStrength: { value: this._settings.distortionStrength },
+                uCrtBend: { value: this._settings.crtBend },
+                uShiftR: { value: this._settings.shiftR },
+                uShiftG: { value: this._settings.shiftG },
+                uShiftB: { value: this._settings.shiftB },
             },
             transparent: true,
             blending: THREE.NormalBlending,
@@ -196,6 +286,15 @@ export default class PortalThermalVision extends PortalBase {
         this._captureSceneToRenderTarget();
         if (this._portalMaterial) {
             this._portalMaterial.uniforms.uTime.value = this._time;
+            this._portalMaterial.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+            this._portalMaterial.uniforms.uThermalIntensity.value = this._settings.thermalIntensity;
+            this._portalMaterial.uniforms.uScanlineStrength.value = this._settings.scanlineStrength;
+            this._portalMaterial.uniforms.uNoiseStrength.value = this._settings.noiseStrength;
+            this._portalMaterial.uniforms.uDistortionStrength.value = this._settings.distortionStrength;
+            this._portalMaterial.uniforms.uCrtBend.value = this._settings.crtBend;
+            this._portalMaterial.uniforms.uShiftR.value = this._settings.shiftR;
+            this._portalMaterial.uniforms.uShiftG.value = this._settings.shiftG;
+            this._portalMaterial.uniforms.uShiftB.value = this._settings.shiftB;
         }
 
         if (this._cubeTester) {
