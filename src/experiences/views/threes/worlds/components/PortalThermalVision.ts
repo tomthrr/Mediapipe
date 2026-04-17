@@ -30,9 +30,9 @@ export default class PortalThermalVision extends PortalBase {
         noiseStrength: 1.0,
         distortionStrength: 0.05,
         crtBend: 2.0,
-        shiftR: 0.015,
+        shiftR: 0.008,
         shiftG: 0.009,
-        shiftB: 0.014,
+        shiftB: 0.008,
     };
 
     private static readonly _VERTEX_SHADER = `
@@ -166,7 +166,7 @@ export default class PortalThermalVision extends PortalBase {
             // vec3 ctexture = texture2D(uSceneTex, uv).rgb;
             // vec3 color = thermal_vision(ctexture);
 
-            gl_FragColor = vec4(color, 1.0);
+            gl_FragColor = vec4(thermal_vision(color), 1.0);
         }
     `;
 
