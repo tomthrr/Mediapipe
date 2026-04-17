@@ -19,18 +19,18 @@ const rightTarget = reactive({ x: 0.5, y: 0.5 });
 
 const leftIsFist = ref<boolean>(false);
 
-const SMOOTHING = 0.35;
+const SMOOTHING = 0.18;
 let rafId: number | null = null;
 
 const toPercent = (n: number): string => `${Math.max(0, Math.min(1, n)) * 100}%`;
 
 const leftStyle = computed(() => ({
-    left: toPercent(leftPoint.x),
+    left: toPercent(1 - leftPoint.x),
     top: toPercent(leftPoint.y),
 }));
 
 const rightStyle = computed(() => ({
-    left: toPercent(rightPoint.x),
+    left: toPercent(1 - rightPoint.x),
     top: toPercent(rightPoint.y),
 }));
 
@@ -44,7 +44,7 @@ const onHandUpdate = (e: Event): void => {
     const left = snapshot.left;
     if (left) {
         leftPoint.visible = true;
-        const p = left.indexTip;
+        const p = left.isFist && left.fist ? left.fist : left.indexTip;
         leftTarget.x = p.x;
         leftTarget.y = p.y;
         leftIsFist.value = !!left.isFist;
@@ -117,13 +117,14 @@ onBeforeUnmount(() => {
     }
 }
 
-/* VIDEO + CANVAS SUPERPOSES */
+/* VIDEO + CANVAS SUPERPOSÉS */
 .webcam,
 .output_canvas {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
+    transform: scaleX(-1);
 }
 
 .webcam {
