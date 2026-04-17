@@ -26,6 +26,11 @@ export default class PortalThermalVision extends PortalBase {
     private readonly _settings = {
         captureHeight: 1080,
         thermalIntensity: 1.0,
+        lumaR: 0.40,
+        lumaG: 0.38,
+        lumaB: 0.25,
+        lumaBias: 0.0,
+        lumaContrast: 1.0,
         scanlineStrength: 0.05,
         noiseStrength: 1.0,
         distortionStrength: 0.05,
@@ -53,6 +58,9 @@ export default class PortalThermalVision extends PortalBase {
         uniform float uTime;
         uniform vec2 uResolution;
         uniform float uThermalIntensity;
+        uniform vec3 uLumaWeights;
+        uniform float uLumaBias;
+        uniform float uLumaContrast;
         uniform float uScanlineStrength;
         uniform float uNoiseStrength;
         uniform float uDistortionStrength;
@@ -70,7 +78,8 @@ export default class PortalThermalVision extends PortalBase {
             colors[1] = vec3(1.0, 1.0, 0.0);
             colors[2] = vec3(1.0, 0.0, 0.0);
 
-            float luminance = dot(vec3(0.40, 0.38, 0.25), color);
+            float luminance = dot(uLumaWeights, color);
+            luminance = clamp((luminance - 0.5) * uLumaContrast + 0.5 + uLumaBias, 0.0, 1.0);
 
             if(luminance < 0.5) {
                 color = mix(colors[0], colors[1], luminance / 0.5);
@@ -193,6 +202,11 @@ export default class PortalThermalVision extends PortalBase {
             .name('captureHeight')
             .onChange(() => this._ensureRenderTarget());
         folder.add(this._settings, 'thermalIntensity', 0, 1, 0.001).name('thermal');
+        folder.add(this._settings, 'lumaR', 0, 1, 0.001).name('lumaR');
+        folder.add(this._settings, 'lumaG', 0, 1, 0.001).name('lumaG');
+        folder.add(this._settings, 'lumaB', 0, 1, 0.001).name('lumaB');
+        folder.add(this._settings, 'lumaBias', -0.5, 0.5, 0.001).name('lumaBias');
+        folder.add(this._settings, 'lumaContrast', 0.1, 3, 0.001).name('lumaContrast');
         folder.add(this._settings, 'scanlineStrength', 0, 0.3, 0.001).name('scanline');
         folder.add(this._settings, 'noiseStrength', 0, 1.5, 0.001).name('noise');
         folder.add(this._settings, 'distortionStrength', 0, 0.2, 0.001).name('distortion');
@@ -234,6 +248,9 @@ export default class PortalThermalVision extends PortalBase {
                 uTime: { value: 0 },
                 uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
                 uThermalIntensity: { value: this._settings.thermalIntensity },
+                uLumaWeights: { value: new THREE.Vector3(this._settings.lumaR, this._settings.lumaG, this._settings.lumaB) },
+                uLumaBias: { value: this._settings.lumaBias },
+                uLumaContrast: { value: this._settings.lumaContrast },
                 uScanlineStrength: { value: this._settings.scanlineStrength },
                 uNoiseStrength: { value: this._settings.noiseStrength },
                 uDistortionStrength: { value: this._settings.distortionStrength },
@@ -288,6 +305,9 @@ export default class PortalThermalVision extends PortalBase {
             this._portalMaterial.uniforms.uTime.value = this._time;
             this._portalMaterial.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
             this._portalMaterial.uniforms.uThermalIntensity.value = this._settings.thermalIntensity;
+            this._portalMaterial.uniforms.uLumaWeights.value.set(this._settings.lumaR, this._settings.lumaG, this._settings.lumaB);
+            this._portalMaterial.uniforms.uLumaBias.value = this._settings.lumaBias;
+            this._portalMaterial.uniforms.uLumaContrast.value = this._settings.lumaContrast;
             this._portalMaterial.uniforms.uScanlineStrength.value = this._settings.scanlineStrength;
             this._portalMaterial.uniforms.uNoiseStrength.value = this._settings.noiseStrength;
             this._portalMaterial.uniforms.uDistortionStrength.value = this._settings.distortionStrength;
