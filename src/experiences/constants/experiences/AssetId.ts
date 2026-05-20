@@ -10,6 +10,7 @@ export const AssetId = {
     THREE_GLTF_DUNES: 'THREE_GLTF_DUNES',
     THREE_TEXTURE_DUNES_ARM: 'THREE_TEXTURE_DUNES_ARM',
     THREE_TEXTURE_DUNES_NORMAL: 'THREE_TEXTURE_DUNES_NORMAL',
+    THREE_GLTF_JELLY: 'THREE_GLTF_JELLY',
 } as const;
 
 export type AssetId = (typeof AssetId)[keyof typeof AssetId];

@@ -54,6 +54,8 @@ class InitCommand {
         ThreeAssetsManager.addModel(AssetId.THREE_GLTF_DUNES, AssetUtils.GetPath('models/desert_statue_uv.glb'));
         ThreeAssetsManager.addTexture(AssetId.THREE_TEXTURE_DUNES_ARM, AssetUtils.GetPath('textures/dunes/dunes_arm.png'));
         ThreeAssetsManager.addTexture(AssetId.THREE_TEXTURE_DUNES_NORMAL, AssetUtils.GetPath('textures/dunes/dunes_normal.png'));
+        
+        ThreeAssetsManager.addModel(AssetId.THREE_GLTF_JELLY, AssetUtils.GetPath('models/jelly.glb'));
     }
 }
 

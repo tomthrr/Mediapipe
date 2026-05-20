@@ -133,10 +133,13 @@ class MediapipeManager {
         const fingers = [8, 12, 16, 20];
 
         const foldedFingers = fingers.filter(tip => {
-            return dist(landmarks[tip], wrist) < 0.25;
+            const d = dist(landmarks[tip], wrist);
+            const isFolded = d < 0.25;
+            return isFolded;
         });
 
-        return foldedFingers.length >= 4;
+        const isFist = foldedFingers.length >= 4;
+        return isFist;
     }
 
     public get hands(): MediapipeHandsSnapshot  { return this._hands; }

@@ -10,6 +10,7 @@ import PortailAscii from './components/PortailAscii';
 import PortalThermalVision from './components/PortalThermalVision';
 import PortalCameraThermalVision from './components/PortalCameraThermalVision';
 import Rainbow from './components/Rainbow';
+import Jelly from './components/Jelly';
 
 export default class WorldThreeView extends ThreeViewBase {
     constructor() {
@@ -28,11 +29,12 @@ export default class WorldThreeView extends ThreeViewBase {
 
         this._actors.push(new Sky());
         this._actors.push(new GridFloor());
+        this._actors.push(new Jelly());
         //this._actors.push(new WindLines());
         //this._actors.push(new PortailAscii());
         //this._actors.push(new PortalThermalVision());
         //this._actors.push(new PortalCameraThermalVision());
-        this._actors.push(new Rainbow());
+        //this._actors.push(new Rainbow());
 
         for (const actor of this._actors) this.add(actor);
     }

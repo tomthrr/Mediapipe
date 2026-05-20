@@ -43,6 +43,7 @@
         "stats.js": "^0.17.0",
         "three": "^0.183.2",
         "three-custom-shader-material": "^6.4.0",
-        "vue": "^3.5.30"
+        "vue": "^3.5.30",
+        "wiggle": "^0.0.17"
     }
 }
